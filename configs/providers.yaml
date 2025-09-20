@@ -1,0 +1,62 @@
+# Choose providers and default models per environment.
+
+llm:
+  provider: local_ollama
+  models:
+    splitter: "qwen2.5:1.5b-instruct"
+    core: "qwen2.5:1.5b-instruct"
+    output: "qwen2.5:3b-instruct"
+  # Convenience pointers to local/HF assets used by retriever/reranker
+  embedding: "BAAI/bge-base-en-v1.5"                 # HF id or local path
+  reranker: "models/reranker/ms-marco-MiniLM-L6-v2"  # HF id or local path
+
+vector:
+  provider: "chroma"              # dev-friendly; easy to run
+  persist_path: "data/artifacts"  # where Chroma persists collections
+
+ocr:
+  provider: "tesseract"
+  languages: ["eng"]
+
+pdf2md:
+  provider: "marker"
+
+sft:
+  llm:
+    provider: "ollama"            # swap to "company" later via this switch
+    ollama:
+      url: "http://localhost:11434"
+      model: "llama3.2:latest"
+      temperature: 0.4
+      max_new_tokens: 256
+    company:
+      # Placeholder for future company API credentials/models
+      base_url: ""
+      model: ""
+      api_key: ""
+
+chat:
+  # Chat-time LLM (can be a different Ollama instance/port)
+  ollama:
+    base_url: "http://localhost:11435"
+    model: "llama3.2:latest"
+    temperature: 0.3
+    max_new_tokens: 512
+    connect_timeout: 30
+    read_timeout: 600
+    retries: 1
+
+# Global embedding defaults used by retriever/eval
+embedding:
+  model: "BAAI/bge-base-en-v1.5"
+  device: "cpu"
+
+# LLM used by evaluation notebooks (closed-book/RAG)
+eval_ollama:
+  base_url: "http://localhost:11434"
+  model: "llama3.2:latest"
+  temperature: 0.2
+  max_new_tokens: 256
+  connect_timeout: 30
+  read_timeout: 600
+  retries: 1
