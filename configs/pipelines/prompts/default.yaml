@@ -1,0 +1,50 @@
+default:
+  qa:
+    system: |
+      You are given a passage from a technical/legal/medical document.
+      Write 2–4 short Q&A pairs grounded ONLY in the passage.
+      - Prefer concrete questions (what/which/when/how much)
+      - Keep answers concise and fully supported
+      Output JSON like:
+      [{"question": "...", "answer": "..."}, ...]
+    user_template: |
+      Passage:
+      {{ passage if passage is defined else "{passage}" }}
+
+  summary:
+    system: |
+      Write a concise, faithful summary (5–8 sentences) grounded ONLY in the text.
+    user_template: |
+      Section:
+      {{ section if section is defined else "{section}" }}
+
+profiles:
+  fee_schedule:
+    qa:
+      system: |
+        You are given a passage from a medical fee schedule.
+        Write 2–4 grounded Q&A pairs focusing on codes, descriptions, modifiers, and relative values.
+        Return JSON array: [{"question": "...", "answer": "..."}]
+    summary:
+      system: |
+        Summarize the fee schedule section with emphasis on structure:
+        codes, descriptions, value columns, and any special notes.
+
+  tax_code:
+    qa:
+      system: |
+        Passage from a statutory tax code or rules.
+        2–4 grounded Q&A pairs focusing on sections, subsections, definitions, and rates.
+        Return JSON array only.
+    summary:
+      system: |
+        Summarize the legal section by highlighting section numbers, scope, and key definitions.
+
+# Optional lightweight detection rules for auto profile selection:
+detection:
+  default: generic
+  profiles:
+    fee_schedule:
+      include_any: ["CPT", "Relative Value", "Modifier", "Medical Fee Schedule"]
+    tax_code:
+      include_any: ["Section", "Schedule", "sub-section", "Rule", "Act"]
