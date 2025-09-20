@@ -1,0 +1,158 @@
+# Generic legal documents pipeline configuration.
+
+ingest:
+  ocr:
+    enable: true
+    dpi: 300
+    lang: "eng"
+    min_chars_no_ocr: 60
+  pdf2md:
+    provider: "marker"                 # Marker/Docling adapter; OCR fallback builds MD
+    preserve_footnotes: true
+    keep_figure_captions: true
+  tables:
+    structure: true
+    provider_order: ["tatr", "paddle", "words"]  # try TATR -> Paddle -> word-grid
+    tatr:
+      detect_model: "models/tatr-detect"
+      structure_model: "models/tatr-structure"
+      conf_thresh: 0.60
+    paddle:
+      enable: true
+    words:
+      max_cols: 6
+      merge_wrap_lines: true
+      min_row_height: 6.0
+    export_markdown: true
+  math:
+    enable: true
+    min_digits: 2
+    require_operator: true
+    latex_ocr:
+      enable: false                    # turn on when you want LaTeX OCR
+      engine: "pix2tex"                # "pix2tex" (default) | "texify"
+      crop_margin: 4                   # px expansion around detected line
+  notations:
+    enable: true
+    use_llm_adjudication: false        # optional later
+
+chunking:
+  strategy: "headings_graph"
+  max_chars: 1200
+  overlap: 200
+  drop_gibberish: true
+  drop_toc: true
+  min_align_score: 70
+
+index:
+  bge_use_prompt: true
+  vector:
+    max_add_batch: 2000
+
+sft:
+  generation:
+    max_qa: 40
+    max_summary: 8
+    seed: 13
+    min_chunk_chars: 300
+    max_chunk_chars: 1600
+
+    # LLM usage (can be false; falls back to heuristics)
+    use_llm: true
+    llm_provider: "ollama"
+    llm_model: "llama3.2:latest"
+    llm_url: "http://localhost:11434"
+    llm_temperature: 0.4
+    llm_max_new_tokens: 256
+
+    # Prompts + profile detection
+    prompts_yaml: "configs/pipelines/prompts/default.yaml"
+    profile_rules_from_prompts_yaml: true   # read detection rules from the same YAML
+    profile_rules: {}                       # optional overrides/extra rules (merged)
+
+    summary_source: "nodes"
+    summary_target_len: 1200
+    datasets_root: "data/datasets"
+
+  split:
+    train_ratio: 0.85
+    dev_ratio: 0.10
+    seed: 42
+
+  package:
+    format: "alpaca"
+
+finetune:
+  backend: "local_peft"           # or "company"
+  enable_training: true
+  output_root: "data/models"
+  datasets_root: "data/datasets"
+
+  # Base model (config-driven, no hardcoding in code)
+  base_model_id: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"         # HF repo id
+  base_model_local_dir: "models/llm/TinyLlama-1.1B-Chat-v1.0" # local cache path (preferred if exists)
+
+  # Optional: only the download script uses this
+  download:
+    allow: true
+    revision: null
+    ignore_patterns: ["*.msgpack"]  # example; keep disk small (optional)
+
+  # LoRA params (used only if enable_training: true)
+  lora:
+    r: 8
+    alpha: 16
+    dropout: 0.05
+    target_modules: ["q_proj", "v_proj"]
+
+  train:
+    learning_rate: 2.0e-4
+    weight_decay: 0.0
+    max_steps: 20
+    per_device_train_batch_size: 1
+    gradient_accumulation_steps: 4
+    bf16: false
+    fp16: false
+    seed: 42
+
+  register: true
+
+reranker:
+  enable: true
+  # use a small cross-encoder; override with a local dir if you cache models
+  base_model_id: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+  base_model_local_dir: ""          # e.g., "models/reranker/msmarco-miniLM-L6-v2"
+  output_root: "data/reranker"
+
+  mining:
+    # build pairs from your Phase-2 SFT (qa.jsonl); positives = source chunk
+    # negatives = hard negatives from top-k ANN minus the true source
+    topk_candidates: 30
+    negatives_per_pos: 4
+    min_question_len: 8
+    max_pairs: 2000
+    seed: 123
+
+  train:
+    epochs: 1
+    batch_size: 16
+    lr: 2.0e-5
+    warmup_steps: 50
+    eval_ratio: 0.1
+    seed: 42
+
+eval:
+  closed_book:
+    use_llm: true
+    max_questions: 50
+  rag:
+    use_llm: true
+    max_questions: 50
+    top_k: 12
+    rerank_top_k: 8
+    return_top_k: 6
+
+chat:
+  search_top_k: 12
+  rerank_top_k: 8
+  return_top_k: 6
