@@ -1,18 +1,15 @@
-# Choose providers and default models per environment.
+# configs/providers.yaml
+# Single source of truth for all providers/models.
+# Local-first defaults; flip any role to `provider: "company"` when you’re ready.
 
 llm:
-  provider: local_ollama
-  models:
-    splitter: "qwen2.5:1.5b-instruct"
-    core: "qwen2.5:1.5b-instruct"
-    output: "qwen2.5:3b-instruct"
-  # Convenience pointers to local/HF assets used by retriever/reranker
+  provider: "local_ollama"   # legacy pointer (not used by Phase 7 switchboard directly)
   embedding: "BAAI/bge-base-en-v1.5"                 # HF id or local path
   reranker: "models/reranker/ms-marco-MiniLM-L6-v2"  # HF id or local path
 
 vector:
-  provider: "chroma"              # dev-friendly; easy to run
-  persist_path: "data/artifacts"  # where Chroma persists collections
+  provider: "chroma"         # can later swap to "pgvector" | "weaviate" | "milvus"
+  persist_path: "data/artifacts"
 
 ocr:
   provider: "tesseract"
@@ -23,35 +20,19 @@ pdf2md:
 
 sft:
   llm:
-    provider: "ollama"            # swap to "company" later via this switch
+    # Switch here between Ollama (local) and company later; both blocks are provided.
+    provider: "ollama"
     ollama:
       url: "http://localhost:11434"
       model: "llama3.2:latest"
       temperature: 0.4
       max_new_tokens: 256
     company:
-      # Placeholder for future company API credentials/models
-      base_url: ""
-      model: ""
-      api_key: ""
+      base_url: "https://api.company.ai"   # fill when you switch
+      model: "company-small"
+      api_key: "${COMPANY_API_KEY}"
 
-chat:
-  # Chat-time LLM (can be a different Ollama instance/port)
-  ollama:
-    base_url: "http://localhost:11435"
-    model: "llama3.2:latest"
-    temperature: 0.3
-    max_new_tokens: 512
-    connect_timeout: 30
-    read_timeout: 600
-    retries: 1
-
-# Global embedding defaults used by retriever/eval
-embedding:
-  model: "BAAI/bge-base-en-v1.5"
-  device: "cpu"
-
-# LLM used by evaluation notebooks (closed-book/RAG)
+# Evaluation (closed-book & RAG) defaults (local Ollama)
 eval_ollama:
   base_url: "http://localhost:11434"
   model: "llama3.2:latest"
@@ -60,3 +41,105 @@ eval_ollama:
   connect_timeout: 30
   read_timeout: 600
   retries: 1
+
+# Embedding defaults used by retriever/eval
+embedding:
+  model: "BAAI/bge-base-en-v1.5"
+  device: "cpu"
+
+# Phase 7: Unified Chatbot (router + models)
+chat:
+  sessions_dir: "data/sessions"      # where chat sessions live
+  streaming: true
+  parallel_per_question: 1           # bump later if you want concurrency per split
+  connect_timeout: 30
+  read_timeout: 600
+
+  # Retriever knobs (used by router -> RetrieverConfig)
+  search_top_k: 12
+  rerank_top_k: 8
+  return_top_k: 6
+
+  # Central switchboard for all roles (intro/splitter/core/output)
+  # LOCAL DEFAULTS (current dev setup)
+  models:
+    intro:
+      provider: "ollama"
+      base_url: "http://127.0.0.1:11434"
+      model: "llama3.2:latest"
+      temperature: 0.2
+      max_new_tokens: 256
+
+    splitter:
+      provider: "ollama"
+      base_url: "http://127.0.0.1:11434"
+      model: "llama3.2:latest"
+      temperature: 0.2
+      max_new_tokens: 256
+
+    core:
+      # Finetuned LoRA core; adapter path comes from DocumentProfile (profile.json)
+      provider: "hf_local"                # <- keep this for local LoRA
+      base_model_id: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+      base_model_local_dir: "models/llm/TinyLlama-1.1B-Chat-v1.0"
+      run_id: "20bb948f"
+      adapter_from_profile: true
+      temperature: 0.1
+      max_new_tokens: 512
+      device: "cpu"
+
+    output:
+      provider: "ollama"
+      base_url: "http://127.0.0.1:11434"
+      model: "llama3.2:latest"
+      temperature: 0.3
+      max_new_tokens: 512
+  # Guardrail knobs (Phase 7.2)
+  guardrails:
+    max_input_chars: 4000
+    pii_block: false
+    pii_regex:
+      - "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"
+      - "\\b(?:\\+?\\d{1,3}[-.\\s]?)?(?:\\(?\\d{3}\\)?[-.\\s]?)?\\d{3}[-.\\s]?\\d{4}\\b"
+    blocked_regex:
+      # add any domain-specific disallowed patterns here (regex, case-insensitive)
+      - "(?i)hack|exploit|payload"
+
+      
+  # -----------------------------------------------
+  # OPTIONAL COMPANY SWITCH (copy these into models.* or flip provider to "company")
+  # Example: to switch intro -> set models.intro.provider: "company" and keep fields below.
+  #
+  # models:
+  #   intro:
+  #     provider: "company"
+  #     base_url: "https://api.company.ai"
+  #     api_key: "${COMPANY_API_KEY}"
+  #     model: "company-small"
+  #     temperature: 0.2
+  #     max_new_tokens: 256
+  #
+  #   splitter:
+  #     provider: "company"
+  #     base_url: "https://api.company.ai"
+  #     api_key: "${COMPANY_API_KEY}"
+  #     model: "company-small"
+  #     temperature: 0.2
+  #     max_new_tokens: 256
+  #
+  #   core:
+  #     provider: "company"   # or keep "hf_local" for local LoRA
+  #     base_url: "https://api.company.ai"
+  #     api_key: "${COMPANY_API_KEY}"
+  #     model: "company-core-8k"
+  #     temperature: 0.1
+  #     max_new_tokens: 512
+  #
+  #   output:
+  #     provider: "company"
+  #     base_url: "https://api.company.ai"
+  #     api_key: "${COMPANY_API_KEY}"
+  #     model: "company-medium"
+  #     temperature: 0.3
+  #     max_new_tokens: 512
+  # -----------------------------------------------
