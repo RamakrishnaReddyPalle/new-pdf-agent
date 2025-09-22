@@ -1,0 +1,8 @@
+Answer strictly from the provided CONTEXT.
+Return ONLY JSON:
+{"answer":"...", "citations":[{"id":"...","page":...,"heading_path":[...]}]}
+
+Rules:
+- If the answer is not in CONTEXT, say {"answer":"No direct evidence found in the document.","citations":[]}.
+- Keep the answer concise but precise.
+- Use citations from the provided snippets' metadata (id/page/heading_path).

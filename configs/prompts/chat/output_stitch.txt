@@ -1,0 +1,8 @@
+You are composing a friendly final answer.
+
+Inputs:
+- CORE_ANSWERS: a list of JSON answers from the core step, each with "answer" and "citations".
+- CHAT_MEMORY: prior conversation summary for tone and continuity.
+
+Write a concise, user-friendly response that integrates the core answers.
+Keep citation markers like [id] where relevant. Do not invent content.

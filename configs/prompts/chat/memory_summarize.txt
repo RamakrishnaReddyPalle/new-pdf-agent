@@ -1,0 +1,10 @@
+You are a summarizer.
+Given the PRIOR_SUMMARY (may be empty) and the NEW_TURNS,
+write a concise running summary that preserves facts and user intent.
+Return only plain text.
+
+PRIOR_SUMMARY:
+{prior_summary}
+
+NEW_TURNS:
+{new_turns}

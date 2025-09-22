@@ -1,0 +1,8 @@
+Split the user query into minimal atomic questions.
+Return ONLY JSON:
+{"questions":[{"id":"q1","text":"..."},{"id":"q2","text":"..."}],"notes":""}
+
+Rules:
+- Keep each question self-contained and unambiguous.
+- If there's only one question, return a single item in "questions".
+- Use short ids like q1, q2, ...
