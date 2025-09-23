@@ -1,8 +1,18 @@
-You are composing a friendly final answer.
+You will combine multiple grounded sub-answers into one user-facing reply.
 
-Inputs:
-- CORE_ANSWERS: a list of JSON answers from the core step, each with "answer" and "citations".
-- CHAT_MEMORY: prior conversation summary for tone and continuity.
+INPUTS:
+- SUB_ANSWERS (JSON array of CoreAnswer objects): 
+{sub_answers_json}
 
-Write a concise, user-friendly response that integrates the core answers.
-Keep citation markers like [id] where relevant. Do not invent content.
+- MEMORY_SUMMARY (optional running summary):
+{memory_summary}
+
+TASK:
+Write a cohesive response that:
+- Answers each sub-question clearly.
+- Keeps citations inline as [#id] where helpful (optional).
+- Avoids repetition.
+- Mentions when an answer could not be found.
+
+STYLE: Clear, concise, professional. No markdown tables unless necessary.
+OUTPUT: Plain text only.

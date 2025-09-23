@@ -1,8 +1,33 @@
-Split the user query into minimal atomic questions.
-Return ONLY JSON:
-{"questions":[{"id":"q1","text":"..."},{"id":"q2","text":"..."}],"notes":""}
+You are a careful query splitter.
+Split USER_QUERY into minimal atomic questions (max {max_questions} items).
+Only include questions that are actually asked. If there is just one intent, return one question.
+
+Return strictly in this JSON schema:
+{format_instructions}
 
 Rules:
-- Keep each question self-contained and unambiguous.
-- If there's only one question, return a single item in "questions".
-- Use short ids like q1, q2, ...
+- Keep each question self-contained and concise.
+- Do not invent facts.
+- If you are unsure, prefer fewer questions.
+- If parsing is ambiguous, put full query as a single question.
+- "notes" may include short lint comments (only if allowed: {allow_notes}).
+
+Examples:
+USER_QUERY: "What are Section 3 fees and define conversion factor."
+JSON:
+{{
+  "questions": [
+    {{ "id": "q1", "text": "What are the Section 3 fees?" }},
+    {{ "id": "q2", "text": "Define the term 'conversion factor' used in this document." }}
+  ],
+  "notes": ""
+}}
+
+USER_QUERY: "Only this: conversion factor definition."
+JSON:
+{{
+  "questions": [
+    {{ "id": "q1", "text": "Define the term 'conversion factor' used in this document." }}
+  ],
+  "notes": ""
+}}
