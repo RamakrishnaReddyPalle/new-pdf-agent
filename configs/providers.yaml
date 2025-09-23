@@ -1,14 +1,14 @@
 # configs/providers.yaml
 # Single source of truth for all providers/models.
-# Local-first defaults; flip any role to `provider: "company"` when you’re ready.
+# Local-first defaults; flip any role to provider: "company" when ready.
 
 llm:
-  provider: "local_ollama"   # legacy pointer (not used by Phase 7 switchboard directly)
-  embedding: "BAAI/bge-base-en-v1.5"                 # HF id or local path
-  reranker: "models/reranker/ms-marco-MiniLM-L6-v2"  # HF id or local path
+  provider: "local_ollama"                   # legacy (not used by Phase-7 switchboard)
+  embedding: "BAAI/bge-base-en-v1.5"
+  reranker: "models/reranker/ms-marco-MiniLM-L6-v2"
 
 vector:
-  provider: "chroma"         # can later swap to "pgvector" | "weaviate" | "milvus"
+  provider: "chroma"
   persist_path: "data/artifacts"
 
 ocr:
@@ -20,21 +20,19 @@ pdf2md:
 
 sft:
   llm:
-    # Switch here between Ollama (local) and company later; both blocks are provided.
     provider: "ollama"
     ollama:
-      url: "http://localhost:11434"
+      url: "http://127.0.0.1:11434"
       model: "llama3.2:latest"
       temperature: 0.4
       max_new_tokens: 256
     company:
-      base_url: "https://api.company.ai"   # fill when you switch
+      base_url: "https://api.company.ai"
       model: "company-small"
       api_key: "${COMPANY_API_KEY}"
 
-# Evaluation (closed-book & RAG) defaults (local Ollama)
 eval_ollama:
-  base_url: "http://localhost:11434"
+  base_url: "http://127.0.0.1:11434"
   model: "llama3.2:latest"
   temperature: 0.2
   max_new_tokens: 256
@@ -42,26 +40,76 @@ eval_ollama:
   read_timeout: 600
   retries: 1
 
-# Embedding defaults used by retriever/eval
 embedding:
   model: "BAAI/bge-base-en-v1.5"
   device: "cpu"
 
-# Phase 7: Unified Chatbot (router + models)
 chat:
-  sessions_dir: "data/sessions"      # where chat sessions live
+  sessions_dir: "data/sessions"
   streaming: true
-  parallel_per_question: 1           # bump later if you want concurrency per split
+  parallel_per_question: 1
   connect_timeout: 30
   read_timeout: 600
 
-  # Retriever knobs (used by router -> RetrieverConfig)
+  # Retriever knobs
   search_top_k: 12
-  rerank_top_k: 8
-  return_top_k: 6
+  rerank_top_k: 10
+  return_top_k: 10
 
-  # Central switchboard for all roles (intro/splitter/core/output)
-  # LOCAL DEFAULTS (current dev setup)
+  # Splitter knobs (soft limits)
+  splitter:
+    max_questions: 6
+    allow_notes: true
+    prompt_path: "configs/prompts/chat/splitter.txt"
+
+  # Guardrail knobs (use intro model for guard; prompt externalized)
+  guardrails:
+    model_role: "intro"   # the 'intro' model below is Ollama llama3.2
+    prompt_path: "configs/prompts/chat/intro_guard.txt"
+    max_input_chars: 4000
+    pii_block: false
+    pii_regex:
+      - "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"
+      - "\\b(?:\\+?\\d{1,3}[-.\\s]?)?(?:\\(?\\d{3}\\)?[-.\\s]?)?\\d{3}[-.\\s]?\\d{4}\\b"
+    blocked_regex:
+      - "(?i)hack|exploit|payload"
+
+  # Global structured-output policy (used by guardrails + splitter + core)
+  structured_output:
+    prefer_native: true
+    method: "json_schema"
+    # use_pydantic_instructions: false   # <- optional: uncomment if you ever switch back to a very small core model
+
+  # Prompts (external files, no hardcoding)
+  prompts:
+    core_rag_path: "configs/prompts/chat/core_rag.txt"
+    output_stitch_path: "configs/prompts/chat/output_stitch.txt"
+
+  # Intent policy (keep downstream resilient—never block on assets)
+  intent_policy:
+    table:
+      require_tables: false
+      prefer: true
+      fallback: "text"
+    math:
+      require_calculators: false
+      prefer: true
+      fallback: "text"
+    glossary:
+      fallback: "text"
+    meta:
+      fallback: "text"
+
+  # Tools (future-proof calculators; off by default)
+  tools:
+    calculators:
+      provider: "disabled"         # "disabled" | "local" | "api"
+      api:
+        base_url: ""               # e.g., https://calc.yourdomain.com
+        api_key: ""                # put in env/secret store when used
+        timeout_sec: 20
+
+  # Central switchboard for roles
   models:
     intro:
       provider: "ollama"
@@ -77,16 +125,26 @@ chat:
       temperature: 0.2
       max_new_tokens: 256
 
+    # --- ACTIVE core for RAG testing: switch to local Ollama llama3.2 ---
     core:
-      # Finetuned LoRA core; adapter path comes from DocumentProfile (profile.json)
-      provider: "hf_local"                # <- keep this for local LoRA
-      base_model_id: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-      base_model_local_dir: "models/llm/TinyLlama-1.1B-Chat-v1.0"
-      run_id: "20bb948f"
-      adapter_from_profile: true
-      temperature: 0.1
+      provider: "ollama"
+      base_url: "http://127.0.0.1:11434"
+      model: "llama3.2:latest"
+      temperature: 0.2
       max_new_tokens: 512
-      device: "cpu"
+    # -------------------------------------------------------------------
+
+    # --- PREVIOUS core (kept for later; commented out, unchanged) ---
+    # core:
+    #   provider: "hf_local"                # local LoRA (adapter resolved from profile)
+    #   base_model_id: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    #   base_model_local_dir: "models/llm/TinyLlama-1.1B-Chat-v1.0"
+    #   run_id: "20bb948f"
+    #   adapter_from_profile: true
+    #   temperature: 0.1
+    #   max_new_tokens: 512
+    #   device: "cpu"
+    # -------------------------------------------------------------------
 
     output:
       provider: "ollama"
@@ -94,22 +152,12 @@ chat:
       model: "llama3.2:latest"
       temperature: 0.3
       max_new_tokens: 512
-  # Guardrail knobs (Phase 7.2)
-  guardrails:
-    max_input_chars: 4000
-    pii_block: false
-    pii_regex:
-      - "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"
-      - "\\b(?:\\+?\\d{1,3}[-.\\s]?)?(?:\\(?\\d{3}\\)?[-.\\s]?)?\\d{3}[-.\\s]?\\d{4}\\b"
-    blocked_regex:
-      # add any domain-specific disallowed patterns here (regex, case-insensitive)
-      - "(?i)hack|exploit|payload"
 
-      
+
   # -----------------------------------------------
   # OPTIONAL COMPANY SWITCH (copy these into models.* or flip provider to "company")
-  # Example: to switch intro -> set models.intro.provider: "company" and keep fields below.
-  #
+  # -----------------------------------------------
+
   # models:
   #   intro:
   #     provider: "company"
@@ -128,7 +176,7 @@ chat:
   #     max_new_tokens: 256
   #
   #   core:
-  #     provider: "company"   # or keep "hf_local" for local LoRA
+  #     provider: "company"
   #     base_url: "https://api.company.ai"
   #     api_key: "${COMPANY_API_KEY}"
   #     model: "company-core-8k"
