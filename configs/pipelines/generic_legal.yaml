@@ -1,4 +1,5 @@
 # Generic legal documents pipeline configuration.
+# configs/pipelines/generic_legal.yaml
 
 ingest:
   ocr:
@@ -7,18 +8,14 @@ ingest:
     lang: "eng"
     min_chars_no_ocr: 60
   pdf2md:
-    provider: "marker"                 # Marker/Docling adapter; OCR fallback builds MD
+    provider: "marker"
     preserve_footnotes: true
     keep_figure_captions: true
   tables:
     structure: true
-    provider_order: ["tatr", "paddle", "words"]  # try TATR -> Paddle -> word-grid
-    tatr:
-      detect_model: "models/tatr-detect"
-      structure_model: "models/tatr-structure"
-      conf_thresh: 0.60
+    provider_order: ["words"]      # robust default; add paddle/tatr later if needed
     paddle:
-      enable: true
+      enable: false
     words:
       max_cols: 6
       merge_wrap_lines: true
@@ -29,49 +26,64 @@ ingest:
     min_digits: 2
     require_operator: true
     latex_ocr:
-      enable: false                    # turn on when you want LaTeX OCR
-      engine: "pix2tex"                # "pix2tex" (default) | "texify"
-      crop_margin: 4                   # px expansion around detected line
+      enable: false
   notations:
     enable: true
-    use_llm_adjudication: false        # optional later
+    use_llm_adjudication: false
 
+# --- Large, denser chunks (significantly bigger) ---
 chunking:
-  strategy: "headings_graph"
-  max_chars: 1200
-  overlap: 200
+  max_chars: 3200                # BIG chunks
+  overlap: 150
   drop_gibberish: true
   drop_toc: true
   min_align_score: 70
+  attach_heading_to_body: true   # merge headings into body text
+  keep_heading_only: false       # no naked heading chunks
+
+# (optional) hierarchy graph used by summaries/SFT profiling
+hierarchy:
+  min_node_chars: 400
+  use_section_regex: true
+  fold_tiny_into_misc: true
+
+# Embedding override (takes precedence over providers.yaml via merge)
+embedding:
+  model: "models/embedding/BAAI-bge-large-en-v1.5"
+  device: "cpu"
 
 index:
   bge_use_prompt: true
   vector:
-    max_add_batch: 2000
+    max_add_batch: 4000
+  # Prevent tiny/heading-only fragments from ever entering the index
+  filter:
+    min_chars: 240                    # drop ultra-short fragments
+    exclude_block_types: ["heading", "image"]
 
 sft:
   generation:
-    max_qa: 40
-    max_summary: 8
+    max_qa: 300                 # go big
+    max_summary: 60
     seed: 13
     min_chunk_chars: 300
-    max_chunk_chars: 1600
+    max_chunk_chars: 2200
 
-    # LLM usage (can be false; falls back to heuristics)
+    # Use LLAMA for SFT generation (Qwen is ONLY for core at chat-time)
     use_llm: true
     llm_provider: "ollama"
-    llm_model: "llama3.2:latest"
-    llm_url: "http://localhost:11434"
-    llm_temperature: 0.4
-    llm_max_new_tokens: 256
+    llm_model: "llama3.1:8b-instruct-q5_1"
+    llm_url: "http://127.0.0.1:11434"
+    llm_temperature: 0.2
+    llm_max_new_tokens: 320
 
-    # Prompts + profile detection
+    # Runner auto-switches to configs/pipelines/prompts/<doc_id>.yaml if present
     prompts_yaml: "configs/pipelines/prompts/default.yaml"
-    profile_rules_from_prompts_yaml: true   # read detection rules from the same YAML
-    profile_rules: {}                       # optional overrides/extra rules (merged)
+    profile_rules_from_prompts_yaml: true
+    profile_rules: {}
 
-    summary_source: "nodes"
-    summary_target_len: 1200
+    summary_source: "chunks"     # IMPORTANT: ensures summaries get real text
+    summary_target_len: 1600
     datasets_root: "data/datasets"
 
   split:
@@ -82,77 +94,49 @@ sft:
   package:
     format: "alpaca"
 
+# We are NOT fine-tuning now.
 finetune:
-  backend: "local_peft"           # or "company"
-  enable_training: true
+  backend: "local_peft"
+  enable_training: false
   output_root: "data/models"
   datasets_root: "data/datasets"
-
-  # Base model (config-driven, no hardcoding in code)
-  base_model_id: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"         # HF repo id
-  base_model_local_dir: "models/llm/TinyLlama-1.1B-Chat-v1.0" # local cache path (preferred if exists)
-
-  # Optional: only the download script uses this
-  download:
-    allow: true
-    revision: null
-    ignore_patterns: ["*.msgpack"]  # example; keep disk small (optional)
-
-  # LoRA params (used only if enable_training: true)
-  lora:
-    r: 8
-    alpha: 16
-    dropout: 0.05
-    target_modules: ["q_proj", "v_proj"]
-
-  train:
-    learning_rate: 2.0e-4
-    weight_decay: 0.0
-    max_steps: 20
-    per_device_train_batch_size: 1
-    gradient_accumulation_steps: 4
-    bf16: false
-    fp16: false
-    seed: 42
-
-  register: true
+  register: false
 
 reranker:
   enable: true
-  # use a small cross-encoder; override with a local dir if you cache models
-  base_model_id: "cross-encoder/ms-marco-MiniLM-L-6-v2"
-  base_model_local_dir: ""          # e.g., "models/reranker/msmarco-miniLM-L6-v2"
+  # Bigger CE reranker (local)
+  base_model_id: "BAAI/bge-reranker-large"
+  base_model_local_dir: "models/reranker/BAAI-bge-reranker-large"
   output_root: "data/reranker"
 
   mining:
-    # build pairs from your Phase-2 SFT (qa.jsonl); positives = source chunk
-    # negatives = hard negatives from top-k ANN minus the true source
-    topk_candidates: 30
-    negatives_per_pos: 4
+    topk_candidates: 60
+    negatives_per_pos: 8
     min_question_len: 8
-    max_pairs: 2000
+    max_pairs: 4000
     seed: 123
 
   train:
     epochs: 1
     batch_size: 16
     lr: 2.0e-5
-    warmup_steps: 50
+    warmup_steps: 100
     eval_ratio: 0.1
     seed: 42
 
 eval:
   closed_book:
     use_llm: true
-    max_questions: 50
+    max_questions: 100
   rag:
     use_llm: true
-    max_questions: 50
-    top_k: 12
-    rerank_top_k: 8
-    return_top_k: 6
+    max_questions: 100
+    top_k: 36           # larger candidate pool to give big chunks room
+    rerank_top_k: 24
+    return_top_k: 18
 
 chat:
-  search_top_k: 12
-  rerank_top_k: 8
-  return_top_k: 6
+  # Larger search pools; final top-k still reasonable for display
+  search_top_k: 36
+  rerank_top_k: 24
+  return_top_k: 18
