@@ -1,0 +1,43 @@
+detection:
+  default: generic
+  profiles:
+    fee_schedule:
+      include_any:
+      - conversion factor
+      - relative value
+      - CPT
+      - modifier
+      - fee schedule
+    math_heavy:
+      include_any:
+      - multiply
+      - percentage
+      - per unit
+      - fee is determined by
+      - RVU
+    tables:
+      include_any:
+      - table
+      - column
+      - code
+      - description
+      - value
+prompts:
+  qa:
+    generic: Ask grounded questions and answer strictly from the provided text; include
+      units and definitions if present.
+    fee_schedule: Generate Q&A about conversion factors, RVUs, section-specific rules,
+      and modifiers. For answers, compute simple fees if explicitly possible from
+      text.
+    math_heavy: Generate Q&A that walks step-by-step through formulas in the text
+      (keep equations intact, no hallucination).
+    tables: 'Generate Q&A that read table rows: code→description, value lookups, column
+      meanings; cite column headers.'
+  summary:
+    generic: Summarize clearly with key points; keep any formulas verbatim.
+    fee_schedule: Summarize ground rules, conversion factor usage per section, and
+      exceptions.
+    math_heavy: Summarize methods for computing fees; preserve LaTeX/inline math if
+      present.
+    tables: Summarize what the table contains (columns, usage) without recreating
+      the whole table.

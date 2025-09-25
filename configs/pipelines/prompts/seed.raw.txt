@@ -1,0 +1,43 @@
+```yml
+detection:
+  default: generic
+  profiles:
+    fee_schedule:
+      include_any:
+        - "fee schedule"
+        - "reimbursement"
+        - "coding guidelines"
+        - "medical billing"
+        - "workers' compensation"
+        - "optum360"
+        - "new york state workers' compensation board"
+        - "official compilation of codes"
+    math_heavy:
+      include_any:
+        - "conversion factors"
+        - "relative value units"
+        - "calculating fees"
+        - "anesthesia base units"
+        - "radiology ground rules"
+        - "pathology and laboratory ground rules"
+        - "physical medicine ground rules"
+    tables:
+      include_any:
+        - "postal zip codes by region"
+        - "cpt codes"
+        - "new cpt codes"
+        - "changed codes"
+        - "deleted cpt codes"
+
+prompts.qa:
+  generic: What is the purpose of this document?
+  fee_schedule: How do I determine the correct fee for a medical service using this schedule?
+  math_heavy: What are the conversion factors used to calculate fees in this schedule?
+  tables: What information can be found on page 5 of this document?
+
+prompts.summary:
+  generic: This is the official New York State Workers' Compensation Medical Fee Schedule, effective April 1, 2019.
+  fee_schedule: The fee schedule provides guidelines for determining the correct fee for medical services rendered under workers' compensation.
+  math_heavy: The schedule includes conversion factors and relative value units used to calculate fees for various medical services.
+  tables: Page 5 of this document contains information on postal zip codes by region, new CPT codes, changed codes, and deleted CPT codes.
+```
