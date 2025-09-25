@@ -1,11 +1,12 @@
 # configs/providers.yaml
 # Single source of truth for all providers/models.
-# Local-first defaults; flip any role to provider: "company" when ready.
+# Local-first defaults
 
 llm:
-  provider: "local_ollama"                   # legacy (not used by Phase-7 switchboard)
-  embedding: "BAAI/bge-base-en-v1.5"
-  reranker: "models/reranker/ms-marco-MiniLM-L6-v2"
+  provider: "local_ollama"
+  # point to local paths for larger models (downloaded below)
+  embedding: "models/embedding/BAAI-bge-large-en-v1.5"
+  reranker: "models/reranker/BAAI-bge-reranker-large"
 
 vector:
   provider: "chroma"
@@ -23,9 +24,11 @@ sft:
     provider: "ollama"
     ollama:
       url: "http://127.0.0.1:11434"
-      model: "llama3.2:latest"
-      temperature: 0.4
-      max_new_tokens: 256
+      model: "llama3.1:8b-instruct-q5_1"
+      temperature: 0.2
+      max_new_tokens: 512
+      connect_timeout: 30     # NEW
+      read_timeout: 900       # NEW  (bump to 900 if your first token still stalls)
     company:
       base_url: "https://api.company.ai"
       model: "company-small"
@@ -41,51 +44,51 @@ eval_ollama:
   retries: 1
 
 embedding:
-  model: "BAAI/bge-base-en-v1.5"
-  device: "cpu"
+  # use a larger embedding model (local directory)
+  model: "models/embedding/BAAI-bge-large-en-v1.5"
+  device: "cpu"    # change to "cuda" if you have GPU
 
 chat:
   sessions_dir: "data/sessions"
   streaming: true
-  parallel_per_question: 1
+  parallel_per_question: 2
   connect_timeout: 30
   read_timeout: 600
 
-  # Retriever knobs
-  search_top_k: 12
-  rerank_top_k: 10
-  return_top_k: 10
+  # Retriever knobs (bigger; aligned to pipeline yaml)
+  search_top_k: 36
+  rerank_top_k: 24
+  return_top_k: 18
 
-  # Splitter knobs (soft limits)
+  # Splitter knobs
   splitter:
-    max_questions: 6
+    max_questions: 8
     allow_notes: true
     prompt_path: "configs/prompts/chat/splitter.txt"
 
   # Guardrail knobs (use intro model for guard; prompt externalized)
   guardrails:
-    model_role: "intro"   # the 'intro' model below is Ollama llama3.2
+    model_role: "intro"
     prompt_path: "configs/prompts/chat/intro_guard.txt"
-    max_input_chars: 4000
-    pii_block: false
+    max_input_chars: 6000
+    pii_block: true
     pii_regex:
       - "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"
       - "\\b(?:\\+?\\d{1,3}[-.\\s]?)?(?:\\(?\\d{3}\\)?[-.\\s]?)?\\d{3}[-.\\s]?\\d{4}\\b"
     blocked_regex:
       - "(?i)hack|exploit|payload"
 
-  # Global structured-output policy (used by guardrails + splitter + core)
+  # Global structured-output policy
   structured_output:
     prefer_native: true
     method: "json_schema"
-    # use_pydantic_instructions: false   # <- optional: uncomment if you ever switch back to a very small core model
 
   # Prompts (external files, no hardcoding)
   prompts:
     core_rag_path: "configs/prompts/chat/core_rag.txt"
     output_stitch_path: "configs/prompts/chat/output_stitch.txt"
 
-  # Intent policy (keep downstream resilient—never block on assets)
+  # Intent policy
   intent_policy:
     table:
       require_tables: false
@@ -100,13 +103,13 @@ chat:
     meta:
       fallback: "text"
 
-  # Tools (future-proof calculators; off by default)
+  # Tools
   tools:
     calculators:
-      provider: "disabled"         # "disabled" | "local" | "api"
+      provider: "disabled"
       api:
-        base_url: ""               # e.g., https://calc.yourdomain.com
-        api_key: ""                # put in env/secret store when used
+        base_url: ""
+        api_key: ""
         timeout_sec: 20
 
   # Central switchboard for roles
@@ -125,16 +128,23 @@ chat:
       temperature: 0.2
       max_new_tokens: 256
 
-    # --- ACTIVE core for RAG testing: switch to local Ollama llama3.2 ---
+    # QWEN **only** for CORE
     core:
       provider: "ollama"
       base_url: "http://127.0.0.1:11434"
-      model: "llama3.2:latest"
+      model: "qwen2.5:3b"
       temperature: 0.2
-      max_new_tokens: 512
-    # -------------------------------------------------------------------
+      max_new_tokens: 768
 
-    # --- PREVIOUS core (kept for later; commented out, unchanged) ---
+    output:
+      provider: "ollama"
+      base_url: "http://127.0.0.1:11434"
+      model: "llama3.2:latest"
+      temperature: 0.3
+      max_new_tokens: 512
+
+    
+    # --- PREVIOUS core ---
     # core:
     #   provider: "hf_local"                # local LoRA (adapter resolved from profile)
     #   base_model_id: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
@@ -146,16 +156,8 @@ chat:
     #   device: "cpu"
     # -------------------------------------------------------------------
 
-    output:
-      provider: "ollama"
-      base_url: "http://127.0.0.1:11434"
-      model: "llama3.2:latest"
-      temperature: 0.3
-      max_new_tokens: 512
-
-
   # -----------------------------------------------
-  # OPTIONAL COMPANY SWITCH (copy these into models.* or flip provider to "company")
+  # COMPANY SWITCH 
   # -----------------------------------------------
 
   # models:
